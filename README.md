@@ -19,7 +19,7 @@
 
 ## 📦 下载
 
-- **GitHub Releases**：<https://github.com/huang2202926/bzwidget/releases> → 下载 `bzwidget.exe`
+- **GitHub Releases**：<https://github.com/huang2202926/bzwidget/releases> → 下载 `bzwidget.zip`
 - 仅支持 **Windows 64 位**（无签名，首次运行若被 SmartScreen 拦截，点「更多信息 → 仍要运行」即可）。
 
 ## 🚀 快速开始
