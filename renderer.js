@@ -118,14 +118,7 @@ function normalizeData(raw) {
 function render(data) {
   currentData = normalizeData(data);
   // 用后端返回（或本地）的参数做实时计算，让收入/进度每秒跳动
-  liveParams = {
-    monthlySalary: data?.monthlySalary ?? config.mock?.monthlySalary,
-    workDaysPerMonth: data?.workDaysPerMonth ?? config.mock?.workDaysPerMonth,
-    workStartTime: data?.workStartTime ?? config.mock?.workStartTime,
-    workEndTime: data?.workEndTime ?? config.mock?.workEndTime,
-    breakStartTime: (data?.breakStartTime !== undefined ? data.breakStartTime : config.mock?.breakStartTime),
-    breakEndTime: (data?.breakEndTime !== undefined ? data.breakEndTime : config.mock?.breakEndTime)
-  };
+  liveParams = { ...data };
   applyModeCopy();
   elStatus.textContent = isStealth()
     ? (currentData.studyStatus || MODE_COPY.study.status)
@@ -135,63 +128,15 @@ function render(data) {
   tickCompute();
 }
 
-/* 24 小时制 "HH:MM" → 距 0 点的分钟数（兼容旧版十进制小时） */
-function toMinutes(v) {
-  if (v === null || v === undefined || v === '') return null;
-  const s = String(v).trim();
-  if (/^\d+(\.\d+)?$/.test(s)) {
-    const n = Number(s);
-    return (n >= 0 && n <= 24) ? Math.round(n * 60) : null;
-  }
-  const m = /^(\d{1,2}):(\d{2})$/.exec(s);
-  if (!m) return null;
-  const h = parseInt(m[1], 10);
-  const mi = parseInt(m[2], 10);
-  if (h > 24 || mi > 59) return null;
-  return h * 60 + mi;
-}
-
-// 按当前时间实时计算今日收入与进度：
-//   每天工时 = 下班 − 上班 − 午休；从上班起按秒累计，午休期间暂停，到下班封顶
 function tickCompute() {
   if (!liveParams) return;
-  const salary = Number(liveParams.monthlySalary) || 0;
-  const wd = Number(liveParams.workDaysPerMonth) || 21.75;
-  const sm = toMinutes(liveParams.workStartTime);
-  const em = toMinutes(liveParams.workEndTime);
-  const spanMin = (sm !== null && em !== null && em > sm) ? (em - sm) : 0;
-  // 午休必须完整落在班次内才算数
-  let bs = toMinutes(liveParams.breakStartTime);
-  let be = toMinutes(liveParams.breakEndTime);
-  if (!(bs !== null && be !== null && be > bs && bs >= sm && be <= em)) { bs = null; be = null; }
-  const breakMin = (bs !== null && be !== null) ? (be - bs) : 0;
-  const effectiveMin = spanMin - breakMin;
-  if (salary > 0 && effectiveMin > 0) {
-    const effectiveSec = effectiveMin * 60;
-    const perSec = (salary / wd) / effectiveSec;
-    const now = new Date();
-    const base = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0).getTime();
-    const startMs = base + sm * 60 * 1000;
-    const elapsedMs = Math.max(0, Math.min(now.getTime() - startMs, spanMin * 60 * 1000));
-    let pausedMs = 0;
-    if (breakMin > 0) {
-      pausedMs = Math.max(0, Math.min(now.getTime(), base + be * 60 * 1000) - (base + bs * 60 * 1000));
-      pausedMs = Math.min(pausedMs, elapsedMs);
-    }
-    const workedSec = Math.max(0, (elapsedMs - pausedMs) / 1000);
-    const income = perSec * workedSec;
-    const prog = workedSec / effectiveSec * 100;
-    elIncome.textContent = formatMoney(income);
-    const pct = Math.max(0, Math.min(100, prog));
-    elPercent.textContent = pct.toFixed(1) + '%';
-    elProgressFill.style.width = pct + '%';
-  } else {
-    // 未配置月薪/班次 → 回退静态值
-    elIncome.textContent = formatMoney(currentData.income);
-    const pct = Math.max(0, Math.min(100, Number(currentData.progress)));
-    elPercent.textContent = pct + '%';
-    elProgressFill.style.width = pct + '%';
-  }
+  const dynamic = Number(liveParams.monthlySalary) > 0 && Income.resolveShift(liveParams);
+  const state = dynamic ? Income.computeState(liveParams) : currentData;
+  elIncome.textContent = formatMoney(state.income);
+  const pct = Math.max(0, Math.min(100, Number(state.progress) || 0));
+  elPercent.textContent = pct.toFixed(1) + '%';
+  elProgressFill.style.width = pct + '%';
+  elStatus.textContent = isStealth() ? (state.studyStatus || currentData.studyStatus) : (state.status || currentData.status);
 }
 
 function ensureLiveTimer() {
@@ -201,6 +146,7 @@ function ensureLiveTimer() {
 
 async function fetchMockData() {
   return {
+    ...config.mock,
     income: config.mock?.income ?? 245.88,
     progress: config.mock?.progress ?? 92,
     status: config.mock?.status ?? '搬砖中',
@@ -237,6 +183,8 @@ async function fetchApiData() {
 }
 
 async function fetchData() {
+  // 刷新通知可能早于启动配置读取完成；初始化会在配置就绪后主动取数。
+  if (!config) return;
   try {
     const data = config.dataSource === 'api' ? await fetchApiData() : await fetchMockData();
     render(data);
@@ -305,6 +253,7 @@ elContextMenu.addEventListener('click', async (e) => {
 window.electronAPI.onRefreshData(() => fetchData());
 window.electronAPI.onConfigChanged((newConfig) => {
   config = { ...config, ...newConfig };
+  WidgetThemes.apply(config.theme);
   fetchData();
   startAutoRefresh();
 });
@@ -312,6 +261,7 @@ window.electronAPI.onConfigChanged((newConfig) => {
 // 启动
 (async () => {
   config = await window.electronAPI.getConfig();
+  WidgetThemes.apply(config.theme);
   await fetchData();
   startAutoRefresh();
   if (countdownTimer) clearInterval(countdownTimer);

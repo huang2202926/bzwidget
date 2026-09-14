@@ -1,0 +1,56 @@
+:root, [data-theme="mint"] {
+  color-scheme: dark;
+  --skin-bg: #1E2A2E;
+  --skin-surface: #243034;
+  --skin-text: #E8EEF0;
+  --skin-muted: #A0B2B8;
+  --skin-accent: #2DD4BF;
+  --skin-accent-end: #34D399;
+  --skin-on-accent: #102A2A;
+  --skin-track: #35464C;
+  --skin-border: #43555C;
+  --skin-hover: #2D4547;
+  --skin-glow: rgba(45,212,191,.18);
+}
+[data-theme="latte"] {
+  color-scheme: light;
+  --skin-bg: #F6F1E7;
+  --skin-surface: #FFFAF2;
+  --skin-text: #342C26;
+  --skin-muted: #736558;
+  --skin-accent: #8A5A32;
+  --skin-accent-end: #A06A3B;
+  --skin-on-accent: #FFFFFF;
+  --skin-track: #E5DAC9;
+  --skin-border: #CABCA9;
+  --skin-hover: #EDE2D1;
+  --skin-glow: transparent;
+}
+[data-theme="blue"] {
+  color-scheme: dark;
+  --skin-bg: #182233;
+  --skin-surface: #202E43;
+  --skin-text: #E7EFFA;
+  --skin-muted: #A2B3CC;
+  --skin-accent: #83BEFF;
+  --skin-accent-end: #A4DAF8;
+  --skin-on-accent: #142438;
+  --skin-track: #30425A;
+  --skin-border: #475D7A;
+  --skin-hover: #2A405B;
+  --skin-glow: rgba(131,190,255,.16);
+}
+[data-theme="iris"] {
+  color-scheme: dark;
+  --skin-bg: #292536;
+  --skin-surface: #332E43;
+  --skin-text: #F0EBFA;
+  --skin-muted: #B9AEC9;
+  --skin-accent: #C4AEF5;
+  --skin-accent-end: #DFB8E9;
+  --skin-on-accent: #2B203E;
+  --skin-track: #454056;
+  --skin-border: #665A78;
+  --skin-hover: #443A57;
+  --skin-glow: rgba(196,174,245,.16);
+}

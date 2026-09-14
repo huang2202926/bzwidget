@@ -5,21 +5,20 @@ const path = require('path');
 const os = require('os');
 const Module = require('module');
 
-const tmpHome = path.join(os.tmpdir(), 'momoyu-migrate-test');
+const tmpHome = fs.mkdtempSync(path.join(os.tmpdir(), 'momoyu-migrate-'));
 const cfgDir = path.join(tmpHome, '.momoyu-widget');
-fs.rmSync(tmpHome, { recursive: true, force: true });
+
 fs.mkdirSync(cfgDir, { recursive: true });
 
 // 让 main.js 里的 os.homedir() 指向临时目录
-process.env.USERPROFILE = tmpHome;
-process.env.HOME = tmpHome;
+os.homedir = () => tmpHome;
 
-const MAIN = 'C:/Users/Administrator/WorkBuddy/2026-09-11-17-15-47/momoyu-widget/main.js';
+const MAIN = path.join(__dirname, 'main.js');
 let src = fs.readFileSync(MAIN, 'utf8');
-src += '\nmodule.exports = { loadConfig, timeToMinutes, minutesToTime, resolveShift, workedSecondsOf, computeTodayState, buildAdminHtml, getConfig: () => config };\n';
+src += '\nmodule.exports = { loadConfig, saveConfig, timeToMinutes, minutesToTime, resolveShift, workedSecondsOf, computeTodayState, buildAdminHtml, getConfig: () => config };\n';
 
 const stubElectron = {
-  app: { whenReady: () => new Promise(() => {}), on() {}, quit() {} },
+  app: { whenReady: () => new Promise(() => {}), on() {}, quit() {}, setPath() {} },
   BrowserWindow: function () {},
   Tray: function () {},
   Menu: { buildFromTemplate: () => ({}) },
@@ -225,5 +224,19 @@ expect('偏好窗口保留窗口设置', settingsHtmlSrc.includes('透明度') &
 const settingsSrc = fs.readFileSync(path.join(base, 'settings.js'), 'utf8');
 expect('偏好窗口配置仅保存独立项', settingsSrc.includes('dataSource') && settingsSrc.includes('opacity') && !settingsSrc.includes('monthlySalary'), true);
 
+writeCfg({ workStartTime: '16:00', workEndTime: '24:00', breakStartTime: '', breakEndTime: '' });
+expect('旧配置默认深海薄荷', loadConfig().theme, 'mint');
+for (const theme of ['latte', 'blue', 'iris']) {
+  m.exports.saveConfig({ ...loadConfig(), theme });
+  expect('重载后保留皮肤 ' + theme, loadConfig().theme, theme);
+}
+m.exports.saveConfig({ ...loadConfig(), theme: 'unknown-theme' });
+expect('未知皮肤回退默认', loadConfig().theme, 'mint');
+expect('午夜下班重载不变', loadConfig().mock.workEndTime, '24:00');
+m.exports.saveConfig(loadConfig());
+fs.writeFileSync(path.join(cfgDir, 'config.json'), '{broken');
+expect('配置损坏后恢复备份', loadConfig().mock.workEndTime, '24:00');
+m.exports.saveConfig(loadConfig());
+expect('恢复后配置可读取', JSON.parse(fs.readFileSync(path.join(cfgDir, 'config.json'), 'utf8')).mock.workEndTime, '24:00');
 console.log(failed ? `\n${failed} 项失败` : '\n全部通过');
 process.exit(failed ? 1 : 0);
