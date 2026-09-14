@@ -1,5 +1,29 @@
 (function (root) {
 'use strict';
+
+/* 文案表按需加载：Node 下 require('./i18n')，浏览器下用 window.WidgetI18n。
+   加载不到时退化为返回 key，保证算法本身永远可用。 */
+let i18nApi = null;
+function i18n() {
+  if (!i18nApi) {
+    try {
+      i18nApi = (typeof module === 'object' && module.exports) ? require('./i18n') : root.WidgetI18n;
+    } catch (e) {
+      i18nApi = root.WidgetI18n || null;
+    }
+  }
+  return i18nApi;
+}
+/* 未指定语言时（'auto'）取中文，保持与旧版本一致 */
+function tr(key, lang, params) {
+  const api = i18n();
+  return api ? api.t(key, lang, params) : key;
+}
+function pickText(custom, key, lang) {
+  const api = i18n();
+  return api ? api.pick(custom, key, lang) : (custom || tr(key, lang));
+}
+
 function timeToMinutes(v) {
   if (v === null || v === undefined || v === '') return null;
   if (typeof v === 'number' || /^\d+(\.\d+)?$/.test(String(v).trim())) {
@@ -61,11 +85,16 @@ function workedSecondsOf(shift, nowMs, baseMs) {
   return Math.max(0, (elapsedMs - pausedMs) / 1000);
 }
 
-function computeState(m, nowDate) {
+/* lang：界面语言（'zh' / 'en' / 'auto'），只影响返回的状态文案，不影响数值。
+   用户自定义的状态文字优先，内置默认值（任何语言）视为未自定义。 */
+function computeState(m, nowDate, lang) {
   const now = nowDate || new Date();
   const salary = Number(m.monthlySalary) || 0;
   const workDays = Number(m.workDaysPerMonth) || 21.75;
   const shift = resolveShift(m);
+
+  const activeStatus = pickText(m.activeStatus || m.status, 'widget.statusMoyu', lang);
+  const activeStudyStatus = pickText(m.activeStudyStatus || m.studyStatus, 'widget.statusStudy', lang);
 
   // 已配置月薪与班次 → 动态计算
   if (salary > 0 && shift) {
@@ -80,12 +109,12 @@ function computeState(m, nowDate) {
       income: Number(income.toFixed(2)),
       progress: Number(progress.toFixed(2)),
       stealthMode: !!m.stealthMode,
-      status: phaseStatus(shift, now, false) || m.activeStatus || m.status || '搬砖中',
-      studyStatus: phaseStatus(shift, now, true) || m.activeStudyStatus || m.studyStatus || '学习中',
-      activeStatus: m.activeStatus || m.status || '搬砖中',
-      activeStudyStatus: m.activeStudyStatus || m.studyStatus || '学习中',
-      titleMoyu: m.titleMoyu || '今日搬砖收入',
-      titleStudy: m.titleStudy || '今日学习进度',
+      status: phaseStatus(shift, now, false, lang) || activeStatus,
+      studyStatus: phaseStatus(shift, now, true, lang) || activeStudyStatus,
+      activeStatus,
+      activeStudyStatus,
+      titleMoyu: pickText(m.titleMoyu, 'widget.titleMoyu', lang),
+      titleStudy: pickText(m.titleStudy, 'widget.titleStudy', lang),
       paydayDay: m.paydayDay ?? null,
       monthlySalary: salary,
       workDaysPerMonth: workDays,
@@ -105,10 +134,10 @@ function computeState(m, nowDate) {
     income: Number(m.income ?? 0),
     progress: Number(m.progress ?? 0),
     stealthMode: !!m.stealthMode,
-    status: m.status || '搬砖中',
-    studyStatus: m.studyStatus || '学习中',
-    titleMoyu: m.titleMoyu || '今日搬砖收入',
-    titleStudy: m.titleStudy || '今日学习进度',
+    status: activeStatus,
+    studyStatus: activeStudyStatus,
+    titleMoyu: pickText(m.titleMoyu, 'widget.titleMoyu', lang),
+    titleStudy: pickText(m.titleStudy, 'widget.titleStudy', lang),
     paydayDay: m.paydayDay ?? null,
     monthlySalary: salary,
     workDaysPerMonth: workDays,
@@ -120,17 +149,17 @@ function computeState(m, nowDate) {
 }
 
 
-function phaseStatus(shift, now, study) {
+function phaseStatus(shift, now, study, lang) {
   const minute = now.getHours() * 60 + now.getMinutes();
-  if (minute < shift.startMin) return study ? '尚未开始' : '未开工';
-  if (minute >= shift.endMin) return '今日完成';
-  if (shift.breakSec && minute >= shift.breakStartMin && minute < shift.breakEndMin) return '休息中';
+  if (minute < shift.startMin) return tr(study ? 'phase.beforeStudy' : 'phase.before', lang);
+  if (minute >= shift.endMin) return tr('phase.done', lang);
+  if (shift.breakSec && minute >= shift.breakStartMin && minute < shift.breakEndMin) return tr('phase.break', lang);
   return null;
 }
-function validateTimes(m) {
+function validateTimes(m, lang) {
   for (const key of ['workStartTime', 'workEndTime', 'breakStartTime', 'breakEndTime']) {
     if (m[key] !== undefined && m[key] !== null && m[key] !== '' && timeToMinutes(m[key]) === null)
-      throw new Error('请输入有效的时间（00:00–24:00）');
+      throw new Error(tr('error.invalidTime', lang));
   }
 }
 

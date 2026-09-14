@@ -17,9 +17,25 @@ assert.equal(at(18).status, '今日完成');
 assert.equal(at(18).income, 400);
 assert.equal(at(22).progress, 100);
 const nodes = new Map();
-const node = id => { if (!nodes.has(id)) nodes.set(id, { textContent: '', style: {}, addEventListener() {} }); return nodes.get(id); };
+const node = id => {
+  if (!nodes.has(id)) nodes.set(id, { textContent: '', style: {}, addEventListener() {}, querySelectorAll: () => [] });
+  return nodes.get(id);
+};
 const renderErrors = [];
-const context = vm.createContext({ Income, console: { ...console, error: (...args) => renderErrors.push(args) }, document: { getElementById: node, addEventListener() {} }, window: { electronAPI: { onRefreshData() {}, onConfigChanged() {} } }, setInterval() {} });
+const context = vm.createContext({
+  Income,
+  WidgetI18n: require('./i18n'),
+  console: { ...console, error: (...args) => renderErrors.push(args) },
+  navigator: { language: 'zh-CN' },
+  document: {
+    getElementById: node,
+    addEventListener() {},
+    documentElement: { lang: '' },
+    title: ''
+  },
+  window: { electronAPI: { onRefreshData() {}, onConfigChanged() {} } },
+  setInterval() {}
+});
 const source = fs.readFileSync(require.resolve('./renderer.js'), 'utf8').split('// 启动')[0];
 vm.runInContext(source, context);
 vm.runInContext('fetchData()', context);

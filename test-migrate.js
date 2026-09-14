@@ -18,7 +18,7 @@ let src = fs.readFileSync(MAIN, 'utf8');
 src += '\nmodule.exports = { loadConfig, saveConfig, timeToMinutes, minutesToTime, resolveShift, workedSecondsOf, computeTodayState, buildAdminHtml, getConfig: () => config };\n';
 
 const stubElectron = {
-  app: { whenReady: () => new Promise(() => {}), on() {}, quit() {}, setPath() {} },
+  app: { whenReady: () => new Promise(() => {}), on() {}, quit() {}, setPath() {}, getLocale: () => 'zh-CN' },
   BrowserWindow: function () {},
   Tray: function () {},
   Menu: { buildFromTemplate: () => ({}) },
@@ -181,10 +181,20 @@ expect('含搬砖标题输入', htmlOn.includes('id="titleMoyu"'), true);
 expect('含学习标题输入', htmlOn.includes('id="titleStudy"'), true);
 expect('含模式切换脚本', htmlOn.includes('function setMode'), true);
 expect('首屏即套用模式', htmlOn.includes('applyMode(stealth);'), true);
+expect('后台页含语言切换', htmlOn.includes('function setLanguage') && htmlOn.includes('langActions'), true);
+expect('后台页注入文案表', htmlOn.includes('const I18N = {'), true);
 
 liveCfg.mock.stealthMode = false;
 const htmlOff = buildAdminHtml(3456);
 expect('搬砖模式：页面标题', htmlOff.includes('<title>搬砖收入 · 后台设置</title>'), true);
+
+// 英文后台页
+liveCfg.language = 'en';
+const htmlEn = buildAdminHtml(3456);
+expect('英文：页面标题', htmlEn.includes('<title>Grind Income · Settings</title>'), true);
+expect('英文：偷偷摸摸区块', htmlEn.includes('Stealth mode'), true);
+expect('英文：语言按钮', htmlEn.includes('>English</button>') && htmlEn.includes('>简体中文</button>'), true);
+liveCfg.language = 'auto';
 
 const scriptMatch = /<script>([\s\S]*?)<\/script>/.exec(htmlOn);
 expect('可抽出内嵌脚本', !!scriptMatch, true);
@@ -200,9 +210,12 @@ if (scriptMatch) {
 /* ---------- 12. 渲染层文案 / 缩放手柄 ---------- */
 const base = path.dirname(MAIN);
 const rendererSrc = fs.readFileSync(path.join(base, 'renderer.js'), 'utf8');
-expect('renderer 含学习文案',
-  rendererSrc.includes('今日学习进度') && rendererSrc.includes('距月考还有') && rendererSrc.includes('学习中'), true);
-expect('renderer 含两套文案映射', rendererSrc.includes('MODE_COPY') && rendererSrc.includes('applyModeCopy'), true);
+const i18nSrc = fs.readFileSync(path.join(base, 'i18n.js'), 'utf8');
+expect('i18n 含中文文案',
+  i18nSrc.includes('今日学习进度') && i18nSrc.includes('距月考还有') && i18nSrc.includes('学习中'), true);
+expect('i18n 含英文文案',
+  i18nSrc.includes("Today's Study Progress") && i18nSrc.includes('Studying') && i18nSrc.includes('Payday in'), true);
+expect('renderer 走 i18n 取词', rendererSrc.includes('WidgetI18n') && rendererSrc.includes('applyModeCopy'), true);
 expect('renderer 读取自定义标题', rendererSrc.includes('titleMoyu') && rendererSrc.includes('titleStudy'), true);
 
 const indexSrc = fs.readFileSync(path.join(base, 'index.html'), 'utf8');
@@ -223,6 +236,36 @@ expect('偏好窗口保留窗口设置', settingsHtmlSrc.includes('透明度') &
 
 const settingsSrc = fs.readFileSync(path.join(base, 'settings.js'), 'utf8');
 expect('偏好窗口配置仅保存独立项', settingsSrc.includes('dataSource') && settingsSrc.includes('opacity') && !settingsSrc.includes('monthlySalary'), true);
+
+/* ---------- 13. 界面语言（i18n） ---------- */
+writeCfg({ monthlySalary: 6400, workDaysPerMonth: 24, workStartTime: '09:00', workEndTime: '18:00',
+           breakStartTime: '12:00', breakEndTime: '13:00' });
+c = loadConfig();
+expect('老配置默认 language=auto', c.language, 'auto');
+m.exports.saveConfig({ ...c, language: 'en' });
+expect('保存后保留 en', loadConfig().language, 'en');
+m.exports.saveConfig({ ...loadConfig(), language: 'fr' });
+expect('未知语言回退 auto', loadConfig().language, 'auto');
+
+// 英文界面下的自动状态与默认文案（computeTodayState 跟随 effectiveLanguage）
+const enJob = { monthlySalary: 6400, workDaysPerMonth: 24, workStartTime: '09:00', workEndTime: '18:00',
+                breakStartTime: '12:00', breakEndTime: '13:00' };
+liveCfg.language = 'en';
+st = stateAt(enJob, 7, 0);
+expect('en 上班前 → Off the clock', st.status, 'Off the clock');
+st = stateAt(enJob, 12, 30);
+expect('en 午休 → On break', st.status, 'On break');
+st = stateAt(enJob, 19, 0);
+expect('en 下班后 → Done for today', st.status, 'Done for today');
+st = stateAt(enJob, 10, 0);
+expect('en 工作中默认状态 → Grinding', st.status, 'Grinding');
+expect('en 默认标题', st.titleMoyu, "Today's Grind Income");
+// 用户自定义状态不受语言影响
+st = stateAt({ ...enJob, status: '搬砖进行中' }, 10, 0);
+expect('en 下自定义状态保留', st.status, '搬砖进行中');
+liveCfg.language = 'auto';
+st = stateAt(enJob, 7, 0);
+expect('zh 上班前 → 未开工', st.status, '未开工');
 
 writeCfg({ workStartTime: '16:00', workEndTime: '24:00', breakStartTime: '', breakEndTime: '' });
 expect('旧配置默认深海薄荷', loadConfig().theme, 'mint');

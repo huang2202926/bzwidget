@@ -90,66 +90,79 @@
     .theme-line { display: block; margin-top: 8px; height: 4px; border-radius: 3px; background: var(--skin-track); }
     .theme-line::before { content: ''; display: block; width: 65%; height: 100%; border-radius: inherit; background: var(--skin-accent); }
     #themeMessage { min-height: 28px; }
+    /* 界面语言：不需要皮肤缩略图，做成更紧凑的按钮 */
+    .lang-choice { position: relative; text-align: center; background: var(--skin-bg); color: var(--skin-text); border: 2px solid var(--skin-border); padding: 10px 12px; }
+    .lang-choice[aria-pressed="true"] { border-color: var(--skin-accent); }
+    .lang-choice[aria-pressed="true"]::after { content: '✓'; position: absolute; right: 10px; top: 10px; color: var(--skin-accent); }
+    .lang-choice:disabled { cursor: wait; }
+    #languageMessage { min-height: 18px; }
   </style>
 </head>
 <body>
-  <h1>搬砖收入小组件设置</h1>
+  <h1 id="pageHeading" data-i18n="settings.h1">搬砖收入小组件设置</h1>
   <div class="form-group">
-    <div class="section-title" id="themeLabel">小组件皮肤</div>
+    <div class="section-title" id="themeLabel" data-i18n="settings.theme">小组件皮肤</div>
     <div class="theme-picker" id="themePicker" role="group" aria-labelledby="themeLabel"></div>
-    <div class="hint" id="themeMessage" role="status" aria-live="polite">点击皮肤立即应用并自动保存，其他设置请点击底部“保存”。</div>
+    <div class="hint" id="themeMessage" role="status" aria-live="polite" data-i18n="settings.themeHint">点击皮肤立即应用并自动保存，其他设置请点击底部“保存”。</div>
+  </div>
+
+  <div class="form-group">
+    <div class="section-title" id="languageLabel" data-i18n="settings.language">界面语言</div>
+    <div class="theme-picker" id="languagePicker" role="group" aria-labelledby="languageLabel"></div>
+    <div class="hint" id="languageMessage" role="status" aria-live="polite" data-i18n="settings.languageHint">切换后立即生效并自动保存；小组件、右键菜单与后台都会跟随。</div>
   </div>
 
   <div class="section">
-    <div class="section-title">内置后台（改参数，立即生效）</div>
+    <div class="section-title" data-i18n="settings.adminSection">内置后台（改参数，立即生效）</div>
     <div class="local-admin">
-      <code id="adminUrl">内置后台窗口</code>
-      <button class="btn-secondary" id="btnOpenAdmin">打开后台</button>
+      <code id="adminUrl" data-i18n="settings.adminPlaceholder">内置后台窗口</code>
+      <button class="btn-secondary" id="btnOpenAdmin" data-i18n="settings.openAdmin">打开后台</button>
     </div>
-    <div class="hint">后台以程序窗口打开（不调起浏览器），改完保存，小组件会自动刷新，无需重启。</div>
+    <div class="hint" data-i18n="settings.adminHint">后台以程序窗口打开（不调起浏览器），改完保存，小组件会自动刷新，无需重启。</div>
   </div>
 
   <div class="form-group">
-    <label>数据来源</label>
+    <label for="dataSource" data-i18n="settings.dataSource">数据来源</label>
     <select id="dataSource">
-      <option value="api">内置后台 / API 接口</option>
-      <option value="mock">本地静态模拟数据</option>
+      <option value="api" data-i18n="settings.dataSourceApi">内置后台 / API 接口</option>
+      <option value="mock" data-i18n="settings.dataSourceMock">本地静态模拟数据</option>
     </select>
   </div>
 
   <div class="form-group api-fields" id="apiFields">
-    <label>API 地址</label>
+    <label for="apiUrl" data-i18n="settings.apiUrl">API 地址</label>
     <input type="text" id="apiUrl" placeholder="http://127.0.0.1:3456/api/today">
-    <div class="hint">留空则自动使用内置后台接口；也可填自建接口，返回 JSON 字段：income、progress、status、paydayDay、monthlySalary、workStartTime、workEndTime</div>
+    <div class="hint" data-i18n="settings.apiUrlHint">留空则自动使用内置后台接口；也可填自建接口，返回 JSON 字段：income、progress、status、paydayDay、monthlySalary、workStartTime、workEndTime</div>
 
-    <label style="margin-top: 12px;">请求头 Headers（JSON）</label>
+    <label for="apiHeaders" style="margin-top: 12px;" data-i18n="settings.apiHeaders">请求头 Headers（JSON）</label>
     <textarea id="apiHeaders" placeholder='{"Authorization":"Bearer xxx"}'></textarea>
-    <div class="hint">如需 Cookie/Token，按 JSON 格式填写</div>
+    <div class="hint" data-i18n="settings.apiHeadersHint">如需 Cookie/Token，按 JSON 格式填写</div>
   </div>
 
   <div class="form-group">
-    <label>刷新间隔（毫秒）</label>
+    <label for="refreshInterval" data-i18n="settings.refresh">刷新间隔（毫秒）</label>
     <input type="number" id="refreshInterval" min="2000" step="1000" value="10000">
-    <div class="hint">最少 2000 毫秒，默认 10000 毫秒（10 秒）</div>
+    <div class="hint" data-i18n="settings.refreshHint">最少 2000 毫秒，默认 10000 毫秒（10 秒）</div>
   </div>
 
   <div class="section">
-    <div class="section-title">窗口</div>
+    <div class="section-title" data-i18n="settings.window">窗口</div>
     <div class="form-group">
-      <label><input type="checkbox" id="alwaysOnTop" style="margin-right:6px;"> 窗口始终置顶</label>
+      <label><input type="checkbox" id="alwaysOnTop" style="margin-right:6px;"><span data-i18n="settings.alwaysOnTop">窗口始终置顶</span></label>
     </div>
     <div class="form-group">
-      <label>透明度 <span id="opacityValue">0.95</span></label>
+      <label><span data-i18n="settings.opacity">透明度</span> <span id="opacityValue">0.95</span></label>
       <input type="range" id="opacity" min="0.3" max="1" step="0.05" value="0.95">
     </div>
   </div>
 
   <div class="actions">
-    <button class="btn-secondary" id="btnCancel">取消</button>
-    <button class="btn-primary" id="btnSave">保存</button>
+    <button class="btn-secondary" id="btnCancel" data-i18n="settings.cancel">取消</button>
+    <button class="btn-primary" id="btnSave" data-i18n="settings.save">保存</button>
   </div>
 
   <script src="themes.js"></script>
+  <script src="i18n.js"></script>
   <script src="settings.js"></script>
 </body>
 </html>

@@ -16,66 +16,102 @@ let liveParams = null;
 let refreshTimer = null;
 let countdownTimer = null;
 let liveTimer = null;
+let lang = 'zh';
 
 function formatMoney(n) {
-  return Number(n).toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return Number(n).toLocaleString(lang === 'en' ? 'en-US' : 'zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+}
+
+function T(key, params) {
+  return WidgetI18n.t(key, lang, params);
+}
+
+/* 把 config 里的语言设置同步过来（effectiveLanguage 由主进程按系统语言解析好） */
+function syncLang(next) {
+  const previous = lang;
+  lang = WidgetI18n.resolve(next?.effectiveLanguage ?? next?.language, navigator.language);
+  document.documentElement.lang = lang === 'en' ? 'en' : 'zh-CN';
+  return previous !== lang;
 }
 
 /* 两套界面文案：
    moyu  = 搬砖收入（今日搬砖收入 / ¥ / 距发薪还有 / 搬砖中）
-   study = 学习进度（今日学习进度 / 分 / 距月考还有 / 学习中）——由「偷偷摸摸」开关控制 */
-const MODE_COPY = {
-  moyu: {
-    title: '今日搬砖收入',
-    unitPrefix: '¥',
-    unitSuffix: '',
-    countdown: '距发薪还有',
-    countdownEmpty: '未设置发薪日',
-    countdownToday: '今日发薪！',
-    status: '搬砖中'
-  },
-  study: {
-    title: '今日学习进度',
-    unitPrefix: '',
-    unitSuffix: ' 分',
-    countdown: '距月考还有',
-    countdownEmpty: '未设置月考日',
-    countdownToday: '今日月考！',
-    status: '学习中'
-  }
-};
+   study = 学习进度（今日学习进度 / 分 / 距月考还有 / 学习中）——由「偷偷摸摸」开关控制
+   文字随界面语言变化，用户自定义的标题/状态优先。 */
+function copyFor(stealth) {
+  return stealth
+    ? {
+        titleKey: 'widget.titleStudy',
+        title: T('widget.titleStudy'),
+        unitPrefix: '',
+        unitSuffix: T('widget.studyUnit'),
+        countdown: T('widget.countdownPrefixStudy'),
+        countdownEmpty: T('widget.countdownEmptyStudy'),
+        countdownToday: T('widget.countdownTodayStudy'),
+        status: T('widget.statusStudy')
+      }
+    : {
+        titleKey: 'widget.titleMoyu',
+        title: T('widget.titleMoyu'),
+        unitPrefix: '¥',
+        unitSuffix: '',
+        countdown: T('widget.countdownPrefix'),
+        countdownEmpty: T('widget.countdownEmpty'),
+        countdownToday: T('widget.countdownToday'),
+        status: T('widget.statusMoyu')
+      };
+}
 
 function isStealth() {
   return !!(currentData.stealthMode ?? config?.mock?.stealthMode);
 }
 
 function modeCopy() {
-  return isStealth() ? MODE_COPY.study : MODE_COPY.moyu;
+  return copyFor(isStealth());
+}
+
+/* 右键菜单文案（含置顶/取消置顶随状态变化） */
+function applyMenuCopy() {
+  for (const item of elContextMenu.querySelectorAll('.menu-item')) {
+    const action = item.dataset.action;
+    if (action === 'toggle-top') {
+      const key = config?.alwaysOnTop === false ? 'menu.pin' : 'menu.unpin';
+      item.dataset.i18n = key;
+      item.textContent = T(key);
+      continue;
+    }
+    const key = item.dataset.i18n;
+    if (key) item.textContent = T(key);
+  }
 }
 
 /* 把标题 / 单位 / 倒计时文案切到当前模式 */
 function applyModeCopy() {
   const copy = modeCopy();
   const m = config?.mock || {};
-  elTitle.textContent = isStealth()
-    ? (currentData.titleStudy || m.titleStudy || copy.title)
-    : (currentData.titleMoyu || m.titleMoyu || copy.title);
+  const stealth = isStealth();
+  elTitle.textContent = stealth
+    ? WidgetI18n.pick(currentData.titleStudy || m.titleStudy, 'widget.titleStudy', lang)
+    : WidgetI18n.pick(currentData.titleMoyu || m.titleMoyu, 'widget.titleMoyu', lang);
   elUnitPrefix.textContent = copy.unitPrefix;
   elUnitSuffix.textContent = copy.unitSuffix;
-  document.title = isStealth() ? '学习进度' : '搬砖收入';
+  document.title = T(stealth ? 'app.widgetTitleStudy' : 'app.widgetTitle');
   updateCountdown();
+  applyMenuCopy();
 }
 
 function formatCountdown(targetDate) {
   const copy = modeCopy();
-  if (!targetDate) return `${copy.countdown} — 天 — 小时`;
+  if (!targetDate) {
+    return T('widget.countdownFormat', { prefix: copy.countdown, days: '—', hours: '—' });
+  }
   const now = new Date();
   const target = new Date(targetDate);
   const diff = target - now;
   if (diff <= 0) return copy.countdownToday;
   const days = Math.floor(diff / (1000 * 60 * 60 * 24));
   const hours = Math.floor((diff % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
-  return `${copy.countdown} ${days} 天 ${hours} 小时`;
+  return T('widget.countdownFormat', { prefix: copy.countdown, days, hours });
 }
 
 // 发薪日存的是「每月几号」（1-31），返回下一次发薪的具体日期
@@ -106,10 +142,10 @@ function updateCountdown() {
 function normalizeData(raw) {
   const income = raw?.income ?? raw?.todayIncome ?? raw?.amount ?? raw?.salary ?? config.mock?.income ?? 0;
   const progress = raw?.progress ?? raw?.percent ?? raw?.percentage ?? config.mock?.progress ?? 0;
-  const status = raw?.status ?? raw?.state ?? raw?.text ?? config.mock?.status ?? '搬砖中';
-  const studyStatus = raw?.studyStatus ?? config.mock?.studyStatus ?? '学习中';
-  const titleMoyu = raw?.titleMoyu ?? config.mock?.titleMoyu ?? '今日搬砖收入';
-  const titleStudy = raw?.titleStudy ?? config.mock?.titleStudy ?? '今日学习进度';
+  const status = raw?.status ?? raw?.state ?? raw?.text ?? config.mock?.status;
+  const studyStatus = raw?.studyStatus ?? config.mock?.studyStatus;
+  const titleMoyu = raw?.titleMoyu ?? config.mock?.titleMoyu;
+  const titleStudy = raw?.titleStudy ?? config.mock?.titleStudy;
   const paydayDay = raw?.paydayDay ?? raw?.salaryDay ?? raw?.payday ?? config.mock?.paydayDay ?? null;
   const stealthMode = raw?.stealthMode ?? raw?.stealth ?? config.mock?.stealthMode ?? false;
   return { income, progress, status, studyStatus, titleMoyu, titleStudy, paydayDay, stealthMode };
@@ -120,10 +156,15 @@ function render(data) {
   // 用后端返回（或本地）的参数做实时计算，让收入/进度每秒跳动
   liveParams = { ...data };
   applyModeCopy();
-  elStatus.textContent = isStealth()
-    ? (currentData.studyStatus || MODE_COPY.study.status)
-    : (currentData.status || MODE_COPY.moyu.status);
-  elLastUpdate.textContent = '更新于 ' + new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+  const stealth = isStealth();
+  elStatus.textContent = WidgetI18n.pick(
+    stealth ? currentData.studyStatus : currentData.status,
+    stealth ? 'widget.statusStudy' : 'widget.statusMoyu',
+    lang
+  );
+  elLastUpdate.textContent = T('widget.updatedAt', {
+    time: new Date().toLocaleTimeString(lang === 'en' ? 'en-US' : 'zh-CN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  });
   ensureLiveTimer();
   tickCompute();
 }
@@ -131,12 +172,17 @@ function render(data) {
 function tickCompute() {
   if (!liveParams) return;
   const dynamic = Number(liveParams.monthlySalary) > 0 && Income.resolveShift(liveParams);
-  const state = dynamic ? Income.computeState(liveParams) : currentData;
+  const state = dynamic ? Income.computeState(liveParams, undefined, lang) : currentData;
   elIncome.textContent = formatMoney(state.income);
   const pct = Math.max(0, Math.min(100, Number(state.progress) || 0));
   elPercent.textContent = pct.toFixed(1) + '%';
   elProgressFill.style.width = pct + '%';
-  elStatus.textContent = isStealth() ? (state.studyStatus || currentData.studyStatus) : (state.status || currentData.status);
+  const stealth = isStealth();
+  elStatus.textContent = WidgetI18n.pick(
+    stealth ? (state.studyStatus || currentData.studyStatus) : (state.status || currentData.status),
+    stealth ? 'widget.statusStudy' : 'widget.statusMoyu',
+    lang
+  );
 }
 
 function ensureLiveTimer() {
@@ -149,7 +195,7 @@ async function fetchMockData() {
     ...config.mock,
     income: config.mock?.income ?? 245.88,
     progress: config.mock?.progress ?? 92,
-    status: config.mock?.status ?? '搬砖中',
+    status: config.mock?.status || T('widget.statusMoyu'),
     paydayDay: config.mock?.paydayDay ?? null,
     monthlySalary: config.mock?.monthlySalary,
     workDaysPerMonth: config.mock?.workDaysPerMonth,
@@ -161,7 +207,7 @@ async function fetchMockData() {
 }
 
 async function fetchApiData() {
-  if (!config.apiUrl) throw new Error('未配置 API 地址');
+  if (!config.apiUrl) throw new Error(T('widget.noApiUrl'));
   let headers = {};
   try {
     headers = JSON.parse(config.apiHeaders || '{}');
@@ -178,7 +224,7 @@ async function fetchApiData() {
   try {
     return JSON.parse(res.body);
   } catch (e) {
-    throw new Error('返回内容不是 JSON');
+    throw new Error(T('widget.badJson'));
   }
 }
 
@@ -190,7 +236,7 @@ async function fetchData() {
     render(data);
   } catch (err) {
     console.error('获取数据失败', err);
-    elLastUpdate.textContent = '获取失败: ' + err.message;
+    elLastUpdate.textContent = T('widget.fetchFailed', { msg: err.message });
   }
 }
 
@@ -242,6 +288,7 @@ elContextMenu.addEventListener('click', async (e) => {
     case 'toggle-top':
       config.alwaysOnTop = !config.alwaysOnTop;
       await window.electronAPI.setConfig({ alwaysOnTop: config.alwaysOnTop });
+      applyMenuCopy();
       break;
     case 'quit':
       window.electronAPI.quit();
@@ -253,6 +300,7 @@ elContextMenu.addEventListener('click', async (e) => {
 window.electronAPI.onRefreshData(() => fetchData());
 window.electronAPI.onConfigChanged((newConfig) => {
   config = { ...config, ...newConfig };
+  syncLang(config);
   WidgetThemes.apply(config.theme);
   fetchData();
   startAutoRefresh();
@@ -261,6 +309,7 @@ window.electronAPI.onConfigChanged((newConfig) => {
 // 启动
 (async () => {
   config = await window.electronAPI.getConfig();
+  syncLang(config);
   WidgetThemes.apply(config.theme);
   await fetchData();
   startAutoRefresh();

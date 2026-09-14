@@ -1,6 +1,6 @@
 {
   "name": "bzwidget",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "description": "搬砖收入桌面小组件",
   "main": "main.js",
   "scripts": {
@@ -8,7 +8,7 @@
     "dev": "node run.js --dev",
     "build": "node build.js",
     "build:portable": "node build.js portable",
-    "test": "node test-migrate.js && node test-income.cjs && node test-backup.cjs"
+    "test": "node test-migrate.js && node test-income.cjs && node test-backup.cjs && node test-i18n.cjs"
   },
   "keywords": [
     "momoyu",
@@ -42,7 +42,8 @@
       "icon.png",
       "income.js",
       "themes.js",
-      "themes.css"
+      "themes.css",
+      "i18n.js"
     ],
     "win": {
       "icon": "icon.ico",

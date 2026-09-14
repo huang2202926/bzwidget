@@ -4,6 +4,7 @@ const fs = require('fs');
 const os = require('os');
 const http = require('http');
 const { normalize: normalizeTheme } = require('./themes');
+const { t: translate, normalize: normalizeLanguage, resolve: resolveLanguage, dict: i18nDict, pick: pickText } = require('./i18n');
 
 // 配置文件路径
 const configDir = path.join(os.homedir(), '.momoyu-widget');
@@ -33,6 +34,7 @@ const defaultConfig = {  x: null,
   alwaysOnTop: true,
   opacity: 0.95,
   theme: 'mint',
+  language: 'auto',  // 界面语言：'auto' 跟随系统 | 'zh' | 'en'
   dataSource: 'api', // 'mock' | 'api'
   apiUrl: '',        // 留空则自动使用内置后台接口
   apiHeaders: '',
@@ -72,6 +74,7 @@ function loadConfig() {
       const savedMock = saved.mock || {};
       const merged = Object.assign({}, defaultConfig, saved);
       merged.theme = normalizeTheme(saved.theme);
+      merged.language = normalizeLanguage(saved.language);
       merged.mock = Object.assign({}, defaultConfig.mock, savedMock);
       // 旧版发薪日存的是完整日期，迁移为「每月几号」
       if (savedMock.paydayDate && savedMock.paydayDay == null) {
@@ -147,6 +150,34 @@ let adminWindow = null;
 let localServer = null;
 let localPort = 0;
 
+/* ---- 界面语言 ---- */
+/* 'auto' 时按系统语言解析（非中文环境 → 英文），让老外开箱即得英文界面 */
+function effectiveLanguage() {
+  let locale = '';
+  try { locale = (typeof app.getLocale === 'function') ? app.getLocale() : ''; } catch (e) { /* ignore */ }
+  return resolveLanguage(config.language, locale);
+}
+function T(key, params) {
+  return translate(key, effectiveLanguage(), params);
+}
+/* 发给渲染进程的配置带 effectiveLanguage（不落盘，只在内存对象上附加） */
+function configForRenderer() {
+  return { ...config, effectiveLanguage: effectiveLanguage() };
+}
+/* 语言切换后同步窗口标题与托盘提示 */
+function refreshChromeText() {
+  if (tray) {
+    tray.setToolTip(T(config.mock.stealthMode ? 'app.nameStudy' : 'app.name'));
+    updateTrayMenu();
+  }
+  if (adminWindow && !adminWindow.isDestroyed()) {
+    adminWindow.setTitle(T(config.mock.stealthMode ? 'app.adminTitleStudy' : 'app.adminTitle'));
+  }
+  if (settingsWindow && !settingsWindow.isDestroyed()) {
+    settingsWindow.setTitle(T('app.settingsTitle'));
+  }
+}
+
 /* ------------------------------------------------------------------ */
 /* 内置后台：一个本地 HTTP 服务，提供设置页面与数据接口                */
 /*   GET  /                后台设置页（改参数、立即生效）              */
@@ -156,13 +187,14 @@ let localPort = 0;
 
 function buildAdminHtml(port) {
   const m = config.mock;
+  const lang = effectiveLanguage();
   const paydayDay = (m.paydayDay != null) ? String(m.paydayDay) : '';
   return `<!DOCTYPE html>
-<html lang="zh-CN">
+<html lang="${lang === 'en' ? 'en' : 'zh-CN'}">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>${m.stealthMode ? '学习进度' : '搬砖收入'} · 后台设置</title>
+<title>${T(m.stealthMode ? 'app.adminTitleStudy' : 'app.adminTitle')}</title>
 <style>
   *{margin:0;padding:0;box-sizing:border-box}
   body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
@@ -210,111 +242,149 @@ function buildAdminHtml(port) {
 </head>
 <body>
 <div class="wrap">
-  <h1><span class="dot"></span><span id="pageTitle">${m.stealthMode ? '学习进度' : '搬砖收入'} · 后台设置</span></h1>
-  <div class="sub" id="pageSub">${m.stealthMode
-    ? '「偷偷摸摸」已开启：小组件文案显示为学习风格（今日学习进度 · 学习中 · 距月考还有）'
-    : '每天工时 = 下班 − 上班 − 午休；今日收入从上班起按秒累计，午休暂停，到下班封顶'}</div>
+  <h1><span class="dot"></span><span id="pageTitle">${T(m.stealthMode ? 'app.adminTitleStudy' : 'app.adminTitle')}</span></h1>
+  <div class="sub" id="pageSub">${T(m.stealthMode ? 'admin.subStudy' : 'admin.subMoyu')}</div>
+
+  <div class="mode" style="margin-top:2px">
+    <div class="mode-title">${T('admin.language')}</div>
+    <div class="mode-desc">${T('admin.languageHint')}</div>
+    <div class="mode-actions" id="langActions">
+      <button type="button" class="mode-btn" data-lang="auto" onclick="setLanguage('auto')">${T('settings.languageAuto')}</button>
+      <button type="button" class="mode-btn" data-lang="zh" onclick="setLanguage('zh')">简体中文</button>
+      <button type="button" class="mode-btn" data-lang="en" onclick="setLanguage('en')">English</button>
+    </div>
+  </div>
 
   <div class="grid">
     <div class="fg">
-      <label>每月发薪日 / 月考日（号，1-31）</label>
+      <label>${T('admin.payday')}</label>
       <input type="number" id="paydayDay" min="1" max="31" step="1" value="${paydayDay}">
     </div>
     <div class="fg">
-      <label>状态文字（搬砖）</label>
-      <input type="text" id="status" value="${m.status ?? '搬砖中'}">
+      <label>${T('admin.status')}</label>
+      <input type="text" id="status" value="${pickText(m.status, 'widget.statusMoyu', lang)}">
     </div>
   </div>
 
   <div class="fg">
-    <label>状态文字（学习模式）</label>
-    <input type="text" id="studyStatus" value="${m.studyStatus ?? '学习中'}">
+    <label>${T('admin.studyStatus')}</label>
+    <input type="text" id="studyStatus" value="${pickText(m.studyStatus, 'widget.statusStudy', lang)}">
   </div>
 
   <div class="grid">
     <div class="fg">
-      <label>主标题（搬砖模式）</label>
-      <input type="text" id="titleMoyu" value="${m.titleMoyu ?? '今日搬砖收入'}">
+      <label>${T('admin.titleMoyu')}</label>
+      <input type="text" id="titleMoyu" value="${pickText(m.titleMoyu, 'widget.titleMoyu', lang)}">
     </div>
     <div class="fg">
-      <label>主标题（学习模式）</label>
-      <input type="text" id="titleStudy" value="${m.titleStudy ?? '今日学习进度'}">
+      <label>${T('admin.titleStudy')}</label>
+      <input type="text" id="titleStudy" value="${pickText(m.titleStudy, 'widget.titleStudy', lang)}">
     </div>
   </div>
 
   <div class="grid">
     <div class="fg">
-      <label>月薪（元）</label>
+      <label>${T('admin.salary')}</label>
       <input type="number" id="monthlySalary" step="100" value="${m.monthlySalary ?? 15000}">
     </div>
     <div class="fg">
-      <label>月工作天数</label>
+      <label>${T('admin.workDays')}</label>
       <input type="number" id="workDaysPerMonth" step="0.25" value="${m.workDaysPerMonth ?? 21.75}">
-      <div class="hint">计薪基数，默认 21.75</div>
+      <div class="hint">${T('admin.workDaysHint')}</div>
     </div>
   </div>
 
   <div class="grid">
     <div class="fg">
-      <label>上班时刻（24 小时制）</label>
+      <label>${T('admin.workStart')}</label>
       <input type="time" id="workStartTime" step="60" value="${m.workStartTime || '08:00'}">
-      <div class="hint">例：08:00</div>
+      <div class="hint">${T('admin.timeExample')}</div>
     </div>
     <div class="fg">
-      <label>下班时刻（24 小时制）</label>
+      <label>${T('admin.workEnd')}</label>
       <input type="time" id="workEndTime" step="60" value="${m.workEndTime || '18:00'}">
-      <div class="hint">例：18:00</div>
+      <div class="hint">${T('admin.timeExample')}</div>
     </div>
   </div>
 
   <div class="grid">
     <div class="fg">
-      <label>午休开始（24 小时制）</label>
+      <label>${T('admin.breakStart')}</label>
       <input type="time" id="breakStartTime" step="60" value="${m.breakStartTime || ''}">
-      <div class="hint">留空 = 不扣午休</div>
+      <div class="hint">${T('admin.breakEmpty')}</div>
     </div>
     <div class="fg">
-      <label>午休结束（24 小时制）</label>
+      <label>${T('admin.breakEnd')}</label>
       <input type="time" id="breakEndTime" step="60" value="${m.breakEndTime || ''}">
-      <div class="hint">每天工时 = 下班 − 上班 − 午休</div>
+      <div class="hint">${T('admin.dailyHoursHint')}</div>
     </div>
   </div>
 
   <div class="mode">
-    <div class="mode-title">偷偷摸摸</div>
-    <div class="mode-desc">开启后界面文案切换为学习风格，降低划水观感</div>
-    <div class="mode-actions">
-      <button type="button" class="mode-btn" data-mode="off" onclick="setMode(false)">关闭</button>
-      <button type="button" class="mode-btn" data-mode="on" onclick="setMode(true)">开启</button>
+    <div class="mode-title">${T('admin.stealth')}</div>
+    <div class="mode-desc">${T('admin.stealthDesc')}</div>
+    <div class="mode-actions" id="stealthActions">
+      <button type="button" class="mode-btn" data-mode="off" onclick="setMode(false)">${T('admin.off')}</button>
+      <button type="button" class="mode-btn" data-mode="on" onclick="setMode(true)">${T('admin.on')}</button>
     </div>
   </div>
 
   <div class="preview">
-    <div class="pv-label" id="liveLabel">今日实时收入</div>
+    <div class="pv-label" id="liveLabel">${T('admin.liveLabel')}</div>
     <div class="pv-val" id="liveIncome">¥0.00</div>
-    <div class="pv-row"><span>今日进度</span><b id="liveProgress">0%</b></div>
+    <div class="pv-row"><span>${T('admin.progress')}</span><b id="liveProgress">0%</b></div>
     <div class="bar"><i id="liveBar" style="width:0%"></i></div>
-    <div class="hint" style="margin-top:8px">计薪工时 <span id="liveHours">0</span>h · 时薪 ¥<span id="liveHourly">0</span> · 每秒 ¥<span id="livePerSec">0</span></div>
+    <div class="hint" style="margin-top:8px" id="ratesLine">${translate('admin.rates', lang, { hours: '0', hourly: '0', perSec: '0' })}</div>
   </div>
 
   <div class="actions">
-    <button class="ghost" onclick="load()">重新读取</button>
-    <button class="primary" onclick="save()">保存并推送</button>
+    <button class="ghost" onclick="load()">${T('admin.reload')}</button>
+    <button class="primary" onclick="save()">${T('admin.save')}</button>
   </div>
 
   <div class="foot">
-    小组件接口：<code>http://127.0.0.1:${port}/api/today</code><br>
-    关闭本窗口不影响小组件运行，可从托盘或右键菜单再次打开。
+    ${T('admin.apiLine')}<code>http://127.0.0.1:${port}/api/today</code><br>
+    ${T('admin.footHint')}
   </div>
 </div>
-<div class="toast" id="toast">已保存，小组件即将刷新</div>
+<div class="toast" id="toast">${T('admin.toastSaved')}</div>
 
 <script>
   const $ = id => document.getElementById(id);
 
+  /* —— i18n：文案表由主进程注入；切换语言后整页刷新，保证文案一致 —— */
+  const I18N = ${JSON.stringify(i18nDict)};
+  const LANG = ${JSON.stringify(lang)};
+  function tr(key, params) {
+    const table = I18N[LANG] || I18N.zh;
+    let text = (table && table[key] != null) ? table[key]
+      : (I18N.zh && I18N.zh[key] != null ? I18N.zh[key] : key);
+    if (params) text = text.replace(/\\{(\\w+)\\}/g, (m, k) =>
+      Object.prototype.hasOwnProperty.call(params, k) ? String(params[k]) : m);
+    return text;
+  }
+
+  function markLanguage(selected) {
+    const value = String(selected || 'auto').toLowerCase();
+    for (const b of document.querySelectorAll('#langActions .mode-btn')) {
+      b.classList.toggle('active', b.dataset.lang === value);
+    }
+  }
+
+  async function setLanguage(value) {
+    try {
+      const r = await fetch('/api/update', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ language: value })
+      });
+      if (r.ok) location.reload();
+      else toast(tr('admin.toastSaveFailed'));
+    } catch (e) { toast(tr('admin.toastSaveFailed')); }
+  }
+
   /* —— 偷偷摸摸：开启后界面文案切换为学习风格 —— */
-  const STUDY_TITLE = '学习进度 · 后台设置';
-  const MOYU_TITLE = '搬砖收入 · 后台设置';
+  const titleFor = on => tr(on ? 'app.adminTitleStudy' : 'app.adminTitle');
   let stealth = ${m.stealthMode ? 'true' : 'false'};
 
   function toast(msg) {
@@ -326,14 +396,12 @@ function buildAdminHtml(port) {
 
   function applyMode(on) {
     stealth = !!on;
-    document.querySelectorAll('.mode-btn').forEach(b =>
+    document.querySelectorAll('#stealthActions .mode-btn').forEach(b =>
       b.classList.toggle('active', (b.dataset.mode === 'on') === stealth));
-    document.title = stealth ? STUDY_TITLE : MOYU_TITLE;
-    $('pageTitle').textContent = stealth ? STUDY_TITLE : MOYU_TITLE;
-    $('pageSub').textContent = stealth
-      ? '「偷偷摸摸」已开启：小组件文案显示为学习风格（今日学习进度 · 学习中 · 距月考还有）'
-      : '每天工时 = 下班 − 上班 − 午休；今日收入从上班起按秒累计，午休暂停，到下班封顶';
-    $('liveLabel').textContent = stealth ? '今日实时学习时长' : '今日实时收入';
+    document.title = titleFor(stealth);
+    $('pageTitle').textContent = titleFor(stealth);
+    $('pageSub').textContent = tr(stealth ? 'admin.subStudy' : 'admin.subMoyu');
+    $('liveLabel').textContent = tr(stealth ? 'admin.liveLabelStudy' : 'admin.liveLabel');
     updatePreview();
   }
 
@@ -345,8 +413,8 @@ function buildAdminHtml(port) {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ stealthMode: !!on })
       });
-      toast(on ? '已切换到学习模式' : '已切换到搬砖模式');
-    } catch (e) { toast('保存失败'); }
+      toast(tr(on ? 'admin.toastModeOn' : 'admin.toastModeOff'));
+    } catch (e) { toast(tr('admin.toastSaveFailed')); }
   }
 
   function toMin(v) {
@@ -371,12 +439,10 @@ function buildAdminHtml(port) {
     const breakMin = (bs != null && be != null) ? (be - bs) : 0;
     const effectiveMin = spanMin - breakMin;      // 扣除午休后的计薪工时
     if (!(salary > 0 && effectiveMin > 0)) {
-      $('liveIncome').textContent = stealth ? '— 分' : '¥—';
+      $('liveIncome').textContent = stealth ? ('—' + tr('widget.studyUnit')) : '¥—';
       $('liveProgress').textContent = '—%';
       $('liveBar').style.width = '0%';
-      $('liveHours').textContent = '—';
-      $('liveHourly').textContent = '—';
-      $('livePerSec').textContent = '—';
+      $('ratesLine').innerHTML = tr('admin.rates', { hours: '—', hourly: '—', perSec: '—' });
       return;
     }
     const dailyHours = effectiveMin / 60;
@@ -396,13 +462,15 @@ function buildAdminHtml(port) {
     const income = perSec * workedSec;
     const prog = workedSec / effectiveSec * 100;
     $('liveIncome').textContent = (stealth ? '' : '¥')
-      + income.toLocaleString('zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
-      + (stealth ? ' 分' : '');
+      + income.toLocaleString(LANG === 'en' ? 'en-US' : 'zh-CN', { minimumFractionDigits: 2, maximumFractionDigits: 2 })
+      + (stealth ? tr('widget.studyUnit') : '');
     $('liveProgress').textContent = prog.toFixed(1) + '%';
     $('liveBar').style.width = Math.min(100, prog) + '%';
-    $('liveHours').textContent = dailyHours.toFixed(2);
-    $('liveHourly').textContent = ((salary / wd) / dailyHours).toFixed(2);
-    $('livePerSec').textContent = perSec.toFixed(4);
+    $('ratesLine').innerHTML = tr('admin.rates', {
+      hours: dailyHours.toFixed(2),
+      hourly: ((salary / wd) / dailyHours).toFixed(2),
+      perSec: perSec.toFixed(4)
+    });
   }
 
   async function load() {
@@ -414,10 +482,10 @@ function buildAdminHtml(port) {
     $('workEndTime').value = s.workEndTime || '18:00';
     $('breakStartTime').value = s.breakStartTime || '';
     $('breakEndTime').value = s.breakEndTime || '';
-    $('status').value = s.status ?? '搬砖中';
-    $('studyStatus').value = s.studyStatus ?? '学习中';
-    $('titleMoyu').value = s.titleMoyu ?? '今日搬砖收入';
-    $('titleStudy').value = s.titleStudy ?? '今日学习进度';
+    $('status').value = s.status ?? tr('widget.statusMoyu');
+    $('studyStatus').value = s.studyStatus ?? tr('widget.statusStudy');
+    $('titleMoyu').value = s.titleMoyu ?? tr('widget.titleMoyu');
+    $('titleStudy').value = s.titleStudy ?? tr('widget.titleStudy');
     $('paydayDay').value = (s.paydayDay != null) ? s.paydayDay : '';
     applyMode(s.stealthMode);
   }
@@ -431,10 +499,10 @@ function buildAdminHtml(port) {
       workEndTime: $('workEndTime').value || '18:00',
       breakStartTime: $('breakStartTime').value || '',
       breakEndTime: $('breakEndTime').value || '',
-      status: $('status').value || '搬砖中',
-      studyStatus: $('studyStatus').value || '学习中',
-      titleMoyu: $('titleMoyu').value || '今日搬砖收入',
-      titleStudy: $('titleStudy').value || '今日学习进度',
+      status: $('status').value || tr('widget.statusMoyu'),
+      studyStatus: $('studyStatus').value || tr('widget.statusStudy'),
+      titleMoyu: $('titleMoyu').value || tr('widget.titleMoyu'),
+      titleStudy: $('titleStudy').value || tr('widget.titleStudy'),
       stealthMode: stealth,
       paydayDay: (rawDay != null && rawDay >= 1 && rawDay <= 31) ? rawDay : null
     };
@@ -443,14 +511,15 @@ function buildAdminHtml(port) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (r.ok) { toast('已保存，小组件即将刷新'); load(); }
-    else { toast('保存失败'); }
+    if (r.ok) { toast(tr('admin.toastSaved')); load(); }
+    else { toast(tr('admin.toastSaveFailed')); }
   }
 
   ['monthlySalary','workDaysPerMonth','workStartTime','workEndTime','breakStartTime','breakEndTime'].forEach(id =>
     $(id).addEventListener('input', updatePreview));
 
   // 实时预览每秒刷新；仅在页面未聚焦时从服务端同步，避免打断输入
+  markLanguage(${JSON.stringify(normalizeLanguage(config.language))});  // 标记当前语言
   applyMode(stealth);            // 首屏立刻按当前模式套用文案与按钮态，不等 5 秒轮询
   setInterval(updatePreview, 1000);
   setInterval(() => { if (!document.hasFocus()) load(); }, 5000);
@@ -461,7 +530,7 @@ function buildAdminHtml(port) {
 
 /* 由「月薪 + 班次（上班→下班，扣除午休）」按当前时间实时计算今日收入与进度
    每天工时 = 下班 − 上班 − 午休；收入从上班起按秒累计，午休期间暂停，到下班封顶 */
-function computeTodayState(nowDate) { return computeState(config.mock, nowDate); }
+function computeTodayState(nowDate) { return computeState(config.mock, nowDate, effectiveLanguage()); }
 
 function handleLocalRequest(req, res) {
   const reqUrl = new URL(req.url, `http://127.0.0.1:${localPort}`);
@@ -477,7 +546,8 @@ function handleLocalRequest(req, res) {
 
   if (reqUrl.pathname === '/api/today') {
     res.setHeader('Content-Type', 'application/json; charset=utf-8');
-    res.end(JSON.stringify(computeTodayState()));
+    // 附带当前语言，方便后台页等外部使用方跟随
+    res.end(JSON.stringify({ ...computeTodayState(), language: effectiveLanguage() }));
     return;
   }
 
@@ -487,16 +557,22 @@ function handleLocalRequest(req, res) {
     req.on('end', () => {
       try {
         const payload = JSON.parse(body || '{}');
-        validateTimes(payload);
-        config.mock = Object.assign({}, config.mock, payload);
+        // language 是顶层字段，不进 mock
+        const { language: langPatch, ...mockPatch } = payload;
+        const nextLang = normalizeLanguage(langPatch ?? config.language);
+        validateTimes(mockPatch, nextLang === 'auto' ? effectiveLanguage() : nextLang);
+        config.mock = Object.assign({}, config.mock, mockPatch);
+        const languageChanged = nextLang !== config.language;
+        config.language = nextLang;
         saveConfig(config);
         updateTrayMenu();
-        // 立即通知小组件刷新，无需等待轮询
+        if (languageChanged) refreshChromeText();
+        // 立即通知小组件刷新（config-changed 会带上 effectiveLanguage，语言/皮肤都能即时跟随）
         if (mainWindow && !mainWindow.isDestroyed()) {
-          mainWindow.webContents.send('refresh-data');
+          mainWindow.webContents.send('config-changed', configForRenderer());
         }
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
-        res.end(JSON.stringify({ ok: true, state: config.mock }));
+        res.end(JSON.stringify({ ok: true, state: config.mock, language: config.language, effectiveLanguage: effectiveLanguage() }));
       } catch (e) {
         res.statusCode = 400;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
@@ -557,7 +633,7 @@ function openAdmin() {
     height: 920,
     minWidth: 460,
     minHeight: 620,
-    title: (config.mock.stealthMode ? '学习进度' : '搬砖收入') + ' · 后台设置',
+    title: T(config.mock.stealthMode ? 'app.adminTitleStudy' : 'app.adminTitle'),
     frame: true,
     resizable: true,
     maximizable: false,
@@ -647,7 +723,7 @@ function createWindow() {
 function createTray() {
   const trayIcon = path.join(__dirname, 'tray.png');
   tray = new Tray(trayIcon);
-  tray.setToolTip(config.mock.stealthMode ? '学习进度小组件' : '搬砖收入小组件');
+  tray.setToolTip(T(config.mock.stealthMode ? 'app.nameStudy' : 'app.name'));
   updateTrayMenu();
   tray.on('click', () => {
     if (mainWindow) {
@@ -659,11 +735,11 @@ function createTray() {
 function updateTrayMenu() {
   if (!tray) return;
   tray.setContextMenu(Menu.buildFromTemplate([
-    { label: config.mock.stealthMode ? '打开学习设置' : '打开后台设置', click: openAdmin },
-    { label: config.mock.stealthMode ? '学习小组件偏好' : '小组件偏好设置', click: openSettings },
+    { label: T(config.mock.stealthMode ? 'tray.openAdminStudy' : 'tray.openAdmin'), click: openAdmin },
+    { label: T(config.mock.stealthMode ? 'tray.openSettingsStudy' : 'tray.openSettings'), click: openSettings },
     { type: 'separator' },
-    { label: '刷新数据', click: () => mainWindow?.webContents.send('refresh-data') },
-    { label: config.alwaysOnTop ? '取消置顶' : '置顶', click: () => {
+    { label: T('menu.refresh'), click: () => mainWindow?.webContents.send('refresh-data') },
+    { label: T(config.alwaysOnTop ? 'menu.unpin' : 'menu.pin'), click: () => {
       config.alwaysOnTop = !config.alwaysOnTop;
       saveConfig(config);
       if (mainWindow) {
@@ -672,7 +748,7 @@ function updateTrayMenu() {
       updateTrayMenu();
     }},
     { type: 'separator' },
-    { label: '退出', click: () => app.quit() }
+    { label: T('menu.quit'), click: () => app.quit() }
   ]));
 }
 
@@ -688,7 +764,7 @@ function openSettings() {
     resizable: false,
     modal: false,
     parent: mainWindow || undefined,
-    title: '小组件偏好设置',
+    title: T('app.settingsTitle'),
     autoHideMenuBar: true,
     backgroundColor: '#1b2629',
     icon: path.join(__dirname, 'icon.ico'),
@@ -704,20 +780,30 @@ function openSettings() {
 }
 
 // IPC 通信
-ipcMain.handle('get-config', () => config);
+ipcMain.handle('get-config', () => configForRenderer());
 ipcMain.handle('set-config', (event, newConfig) => {
-  if (newConfig.mock) validateTimes(newConfig.mock);
+  if (newConfig.mock) validateTimes(newConfig.mock, effectiveLanguage());
   const mock = newConfig.mock ? Object.assign({}, config.mock, newConfig.mock) : config.mock;
-  const nextConfig = { ...config, ...newConfig, mock, theme: normalizeTheme(newConfig.theme ?? config.theme) };
+  // effectiveLanguage 只是主进程附加的展示字段，不允许写回配置
+  const { effectiveLanguage: _displayOnly, ...patch } = newConfig || {};
+  const nextConfig = {
+    ...config,
+    ...patch,
+    mock,
+    theme: normalizeTheme(patch.theme ?? config.theme),
+    language: normalizeLanguage(patch.language ?? config.language)
+  };
   if (!saveConfig(nextConfig)) throw new Error('设置保存失败，请检查配置目录是否可写');
+  const languageChanged = nextConfig.language !== config.language;
   config = nextConfig;
   if (mainWindow) {
     mainWindow.setAlwaysOnTop(config.alwaysOnTop);
     mainWindow.setOpacity(config.opacity);
-    mainWindow.webContents.send('config-changed', config);
+    mainWindow.webContents.send('config-changed', configForRenderer());
   }
   updateTrayMenu();
-  return config;
+  if (languageChanged) refreshChromeText();
+  return configForRenderer();
 });
 ipcMain.handle('open-settings', () => { openSettings(); return true; });
 ipcMain.handle('open-admin', () => { openAdmin(); return `http://127.0.0.1:${localPort}/`; });
