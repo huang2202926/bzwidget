@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>搬砖收入</title>
+  <link rel="stylesheet" href="styles.css">
+</head>
+<body class="widget">
+  <div class="card" id="card">
+    <div class="header">
+      <span class="title" id="title">今日学习进度</span>
+    </div>
+    <div class="amount">
+      <span class="currency" id="unitPrefix"></span>
+      <span class="value" id="income">0.00</span>
+      <span class="unit-suffix" id="unitSuffix">分</span>
+    </div>
+    <div class="countdown" id="countdown">距月考还有 — 天 — 小时</div>
+    <div class="progress-row">
+      <span class="status-dot"></span>
+      <span class="status-text" id="status">学习中</span>
+      <span class="percent" id="percent">0%</span>
+    </div>
+    <div class="progress-bar">
+      <div class="progress-fill" id="progressFill" style="width: 0%;"></div>
+    </div>
+    <div class="last-update" id="lastUpdate">—</div>
+  </div>
+
+  <!-- 右键菜单 -->
+  <div class="context-menu" id="contextMenu">
+    <div class="menu-item" data-action="refresh">刷新数据</div>
+    <div class="menu-item" data-action="admin">后台设置</div>
+    <div class="menu-item" data-action="settings">小组件偏好</div>
+    <div class="menu-item" data-action="toggle-top">取消置顶</div>
+    <div class="menu-item" data-action="quit">退出</div>
+  </div>
+
+  <script src="renderer.js"></script>
+</body>
+</html>
