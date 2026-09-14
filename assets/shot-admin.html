@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>搬砖收入 · 后台设置</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+    background:#0f1a1d;color:#e8eef0;min-height:100vh;display:flex;align-items:flex-start;justify-content:center;padding:24px;
+    overflow-y:auto}
+  .wrap{width:100%;max-width:460px;background:#1b2629;border:1px solid rgba(45,212,191,.18);border-radius:16px;
+    padding:26px;box-shadow:0 18px 60px rgba(0,0,0,.45)}
+  h1{font-size:17px;color:#2dd4bf;margin-bottom:4px;display:flex;align-items:center;gap:8px}
+  .sub{font-size:12px;color:#5a6b6f;margin-bottom:18px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#2dd4bf;box-shadow:0 0 10px #2dd4bf}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  .fg{margin-bottom:14px}
+  label{display:block;font-size:12px;color:#9aa9ad;margin-bottom:6px}
+  .hint{font-size:11px;color:#5a6b6f;margin-top:4px}
+  input{width:100%;padding:9px 11px;border-radius:9px;border:1px solid rgba(255,255,255,.1);
+    background:#243034;color:#e8eef0;font-size:13px;outline:none;transition:.15s}
+  input:focus{border-color:#2dd4bf;box-shadow:0 0 0 3px rgba(45,212,191,.12)}
+  .actions{display:flex;gap:10px;margin-top:20px}
+  button{flex:1;padding:10px;border-radius:9px;border:none;cursor:pointer;font-size:13px;font-weight:600}
+  .primary{background:#2dd4bf;color:#0b2320}
+  .primary:hover{background:#5eead4}
+  .ghost{background:rgba(255,255,255,.08);color:#c5d0d3;flex:0 0 110px}
+  .ghost:hover{background:rgba(255,255,255,.14)}
+  .bar{height:8px;border-radius:99px;background:rgba(255,255,255,.09);overflow:hidden;margin-top:6px}
+  .bar>i{display:block;height:100%;width:0;background:linear-gradient(90deg,#2dd4bf,#5eead4);transition:width .3s}
+  .preview{background:#243034;border:1px solid rgba(45,212,191,.18);border-radius:12px;padding:14px 16px;margin:4px 0 16px}
+  .pv-label{font-size:11px;color:#9aa9ad}
+  .pv-val{font-size:24px;color:#2dd4bf;font-weight:700;margin:2px 0 8px;font-variant-numeric:tabular-nums}
+  .pv-row{display:flex;justify-content:space-between;font-size:12px;color:#c5d0d3;margin-bottom:6px}
+  .pv-row b{color:#2dd4bf;font-variant-numeric:tabular-nums}
+  .mode{border:1px solid rgba(255,255,255,.1);border-radius:12px;background:#243034;padding:14px 16px;margin:2px 0 18px}
+  .mode-title{font-size:14px;font-weight:700;color:#e8eef0;margin-bottom:6px}
+  .mode-desc{font-size:12px;color:#5a6b6f;line-height:1.6;margin-bottom:12px}
+  .mode-actions{display:flex;gap:10px}
+  .mode-btn{flex:0 0 96px;padding:8px 0;border-radius:9px;background:transparent;border:1px solid rgba(255,255,255,.16);
+    color:#9aa9ad;font-size:13px;font-weight:600;cursor:pointer;transition:.15s}
+  .mode-btn.active{border-color:#2dd4bf;color:#2dd4bf;background:rgba(45,212,191,.1)}
+  .foot{margin-top:16px;padding-top:14px;border-top:1px solid rgba(255,255,255,.07);font-size:11px;color:#5a6b6f;line-height:1.7}
+  .foot code{color:#2dd4bf;font-family:Consolas,monospace}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1><span class="dot"></span><span>搬砖收入 · 后台设置</span></h1>
+  <div class="sub">每天工时 = 下班 − 上班 − 午休；今日收入从上班起按秒累计，午休暂停，到下班封顶</div>
+
+  <div class="grid">
+    <div class="fg">
+      <label>每月发薪日 / 月考日（号，1-31）</label>
+      <input type="number" value="20">
+    </div>
+    <div class="fg">
+      <label>状态文字（搬砖）</label>
+      <input type="text" value="搬砖中">
+    </div>
+  </div>
+
+  <div class="fg">
+    <label>状态文字（学习模式）</label>
+    <input type="text" value="学习中">
+  </div>
+
+  <div class="grid">
+    <div class="fg">
+      <label>主标题（搬砖模式）</label>
+      <input type="text" value="今日搬砖收入">
+    </div>
+    <div class="fg">
+      <label>主标题（学习模式）</label>
+      <input type="text" value="今日学习进度">
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="fg">
+      <label>月薪（元）</label>
+      <input type="number" value="15000">
+    </div>
+    <div class="fg">
+      <label>月工作天数</label>
+      <input type="number" value="21.75">
+      <div class="hint">计薪基数，默认 21.75</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="fg">
+      <label>上班时刻（24 小时制）</label>
+      <input type="time" value="08:30">
+      <div class="hint">例：08:00</div>
+    </div>
+    <div class="fg">
+      <label>下班时刻（24 小时制）</label>
+      <input type="time" value="18:00">
+      <div class="hint">例：18:00</div>
+    </div>
+  </div>
+
+  <div class="grid">
+    <div class="fg">
+      <label>午休开始（24 小时制）</label>
+      <input type="time" value="12:00">
+      <div class="hint">留空 = 不扣午休</div>
+    </div>
+    <div class="fg">
+      <label>午休结束（24 小时制）</label>
+      <input type="time" value="13:30">
+      <div class="hint">每天工时 = 下班 − 上班 − 午休</div>
+    </div>
+  </div>
+
+  <div class="mode">
+    <div class="mode-title">偷偷摸摸</div>
+    <div class="mode-desc">开启后界面文案切换为学习风格，降低划水观感</div>
+    <div class="mode-actions">
+      <button type="button" class="mode-btn active" style="opacity:.6">关闭</button>
+      <button type="button" class="mode-btn">开启</button>
+    </div>
+  </div>
+
+  <div class="preview">
+    <div class="pv-label">今日实时收入</div>
+    <div class="pv-val">¥245.88</div>
+    <div class="pv-row"><span>今日进度</span><b>92%</b></div>
+    <div class="bar"><i style="width:92%"></i></div>
+    <div class="hint" style="margin-top:8px">计薪工时 8.5h · 时薪 ¥70.18 · 每秒 ¥0.019</div>
+  </div>
+
+  <div class="actions">
+    <button class="ghost">重新读取</button>
+    <button class="primary">保存并推送</button>
+  </div>
+
+  <div class="foot">
+    小组件接口：<code>http://127.0.0.1:3456/api/today</code><br>
+    关闭本窗口不影响小组件运行，可从托盘或右键菜单再次打开。
+  </div>
+</div>
+</body>
+</html>
