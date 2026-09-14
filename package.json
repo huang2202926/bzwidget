@@ -8,7 +8,7 @@
     "dev": "node run.js --dev",
     "build": "node build.js",
     "build:portable": "node build.js portable",
-    "test": "node test-migrate.js && node test-income.cjs"
+    "test": "node test-migrate.js && node test-income.cjs && node test-backup.cjs"
   },
   "keywords": [
     "momoyu",
