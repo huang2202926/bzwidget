@@ -55,12 +55,12 @@
 
 ## 📦 下载
 
-- **GitHub Releases**：<https://github.com/huang2202926/bzwidget/releases> → 下载 `bzwidget_v1.1.0.zip`（或直接下 `bzwidget.exe`）
+- **GitHub Releases**：<https://github.com/huang2202926/bzwidget/releases> → 下载 `bzwidget_v1.1.0.zip`，解压后运行 `bzwidget.exe`
 - 仅支持 **Windows 64 位**（无签名，首次运行若被 SmartScreen 拦截，点「更多信息 → 仍要运行」即可）。
 
 ## 🚀 快速开始
 
-1. 双击 `bzwidget.exe`（免安装单文件版），小组件出现在桌面，默认置顶。
+1. 解压 zip，双击 `bzwidget.exe`（免安装单文件版），小组件出现在桌面，默认置顶。
 2. 右键小组件（或右键托盘图标）→ **后台设置**。
 3. 在后台窗口填写：月薪、月工作天数、上班 / 下班 / 午休时刻、每月发薪日等，点 **保存并推送**。
    - 时刻均为 **24 小时制**（`08:00`、`18:00`，支持分钟如 `09:30`）；午休留空 = 不扣午休。

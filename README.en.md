@@ -54,12 +54,12 @@ Right-click the widget → **Preferences** → **Theme**, click once and it appl
 
 ## 📦 Download
 
-- **GitHub Releases**: <https://github.com/huang2202926/bzwidget/releases> → download `bzwidget.zip`
+- **GitHub Releases**: <https://github.com/huang2202926/bzwidget/releases> → download `bzwidget_v1.1.0.zip`, then run `bzwidget.exe` from the unzipped folder
 - **Windows 64-bit only.** The binary is unsigned, so if SmartScreen blocks it, click *More info → Run anyway*.
 
 ## 🚀 Quick start
 
-1. Double-click `bzwidget.exe` — the widget appears on your desktop, always on top by default.
+1. Unzip the package and double-click `bzwidget.exe` — the widget appears on your desktop, always on top by default.
 2. Right-click the widget (or the tray icon) → **Settings**.
 3. Fill in monthly salary, work days per month, start / end / break times and the payday, then click **Save & push**.
    - Times use 24-hour format (`08:00`, `18:00`, minutes allowed like `09:30`). Leave the break empty to have it paid.
